@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.*.local
+uploads/
+*.log
+.DS_Store
+coverage/
+.vscode/
+.idea/
+postgres_data/
+redis_data/

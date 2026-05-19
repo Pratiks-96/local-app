@@ -1,0 +1,287 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum PostCategory {
+  GENERAL
+  BUY_SELL
+  LOST_FOUND
+  EVENTS
+  ALERTS
+  JOBS
+  RECOMMENDATIONS
+}
+
+enum PostStatus {
+  ACTIVE
+  HIDDEN
+  REMOVED
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum ItemCondition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+  POOR
+}
+
+enum NotificationType {
+  LIKE
+  COMMENT
+  MESSAGE
+  MENTION
+  ADMIN
+  SYSTEM
+}
+
+model User {
+  id                String    @id @default(uuid())
+  email             String?   @unique
+  phone             String?   @unique
+  passwordHash      String?
+  googleId          String?   @unique
+  firstName         String
+  lastName          String
+  avatarUrl         String?
+  bio               String?
+  role              Role      @default(USER)
+  emailVerified     Boolean   @default(false)
+  emailVerifyToken  String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  refreshToken      String?
+  isActive          Boolean   @default(true)
+  locationId        String?
+  location          Location? @relation(fields: [locationId], references: [id])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  posts             Post[]
+  comments          Comment[]
+  likes             Like[]
+  bookmarks         Bookmark[]
+  reports           Report[]  @relation("Reporter")
+  reportedPosts     Report[]  @relation("ReportedPost")
+  marketplaceItems  MarketplaceItem[]
+  notifications     Notification[]
+  sentMessages      Message[] @relation("Sender")
+  conversationMembers ConversationMember[]
+  pollVotes         PollVote[]
+}
+
+model Location {
+  id        String     @id @default(uuid())
+  name      String
+  type      String     // state, city, area, society
+  parentId  String?
+  parent    Location?  @relation("LocationHierarchy", fields: [parentId], references: [id])
+  children  Location[] @relation("LocationHierarchy")
+  latitude  Float?
+  longitude Float?
+  users     User[]
+  posts     Post[]
+  createdAt DateTime   @default(now())
+
+  @@unique([name, type, parentId])
+  @@index([type])
+  @@index([parentId])
+}
+
+model Post {
+  id          String       @id @default(uuid())
+  title       String?
+  content     String
+  category    PostCategory @default(GENERAL)
+  status      PostStatus   @default(ACTIVE)
+  mediaUrls   String[]     @default([])
+  tags        String[]     @default([])
+  isPinned    Boolean      @default(false)
+  authorId    String
+  author      User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  locationId  String
+  location    Location     @relation(fields: [locationId], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  comments    Comment[]
+  likes       Like[]
+  bookmarks   Bookmark[]
+  reports     Report[]     @relation("ReportedPost")
+  poll        Poll?
+
+  @@index([locationId, createdAt])
+  @@index([category])
+  @@index([authorId])
+}
+
+model Poll {
+  id        String     @id @default(uuid())
+  postId    String     @unique
+  post      Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  question  String
+  options   PollOption[]
+  votes     PollVote[]
+  endsAt    DateTime?
+  createdAt DateTime   @default(now())
+}
+
+model PollOption {
+  id       String     @id @default(uuid())
+  pollId   String
+  poll     Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  text     String
+  votes    PollVote[]
+}
+
+model PollVote {
+  id       String     @id @default(uuid())
+  pollId   String
+  poll     Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  optionId String
+  option   PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, userId])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  replies   Comment[] @relation("CommentReplies")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId])
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  name      String?
+  isGroup   Boolean  @default(false)
+  areaId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members   ConversationMember[]
+  messages  Message[]
+}
+
+model ConversationMember {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade)
+  content        String
+  mediaUrl       String?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model MarketplaceItem {
+  id            String        @id @default(uuid())
+  title         String
+  description   String
+  price         Float
+  condition     ItemCondition @default(GOOD)
+  photos        String[]      @default([])
+  contactPhone  String?
+  contactEmail  String?
+  isSold        Boolean       @default(false)
+  authorId      String
+  author        User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  locationId    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([authorId])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+}
+
+model Report {
+  id          String       @id @default(uuid())
+  reason      String
+  status      ReportStatus @default(PENDING)
+  reporterId  String
+  reporter    User         @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  postId      String?
+  post        Post?        @relation("ReportedPost", fields: [postId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([status])
+}
