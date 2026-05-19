@@ -1,0 +1,156 @@
+version: '3.9'
+
+# ═══════════════════════════════════════════════════════════════
+#  LocalConnect — Docker Compose
+#
+#  PostgreSQL runs as a container with a NAMED VOLUME so data
+#  persists across restarts and rebuilds.
+#
+#  No PostgreSQL install needed on the host machine!
+#
+#  Usage:
+#    docker-compose up -d          # start all
+#    docker-compose up -d postgres # start only postgres
+#    docker-compose down           # stop all (data safe)
+#    docker-compose down -v        # stop + DELETE all data
+#
+#  Data lives at Docker volume: localconnect_postgres_data
+#  To see it: docker volume inspect localconnect_postgres_data
+# ═══════════════════════════════════════════════════════════════
+
+services:
+
+  # ── PostgreSQL (runs as container, data stored in volume) ────
+  postgres:
+    image: postgres:16-alpine
+    container_name: localconnect-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     localconnect
+      POSTGRES_PASSWORD: localconnect123
+      POSTGRES_DB:       localconnect
+    ports:
+      - "5432:5432"       # host:container — access from host too
+    volumes:
+      # Named volume — data persists even after container restart
+      - postgres_data:/var/lib/postgresql/data
+      # Init SQL — runs only on first start (when volume is empty)
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localconnect -d localconnect"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+      start_period: 10s
+    networks:
+      - localconnect-net
+
+  # ── Backend (FastAPI) ────────────────────────────────────────
+  backend:
+    build:
+      context:    ./backend
+      dockerfile: Dockerfile
+    container_name: localconnect-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL:               postgresql://localconnect:localconnect123@postgres:5432/localconnect
+      SECRET_KEY:                 dev-secret-key-change-in-production-must-be-32-chars-min
+      ACCESS_TOKEN_EXPIRE_MINUTES: "1440"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy   # waits for postgres to be ready
+    networks:
+      - localconnect-net
+    volumes:
+      - ./backend:/app              # hot reload in dev
+
+  # ── Frontend (React + Nginx) ─────────────────────────────────
+  frontend:
+    build:
+      context:    ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000/api
+    container_name: localconnect-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - localconnect-net
+
+  # ── Prometheus ───────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: localconnect-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - localconnect-net
+
+  # ── Node Exporter ────────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.8.1
+    container_name: localconnect-node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - localconnect-net
+
+  # ── Grafana ──────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: localconnect-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - localconnect-net
+
+# ── Named Volumes ────────────────────────────────────────────────
+# These are managed by Docker — data survives container restarts
+volumes:
+  postgres_data:
+    name: localconnect_postgres_data    # explicit name so easy to find
+    driver: local
+
+  prometheus_data:
+    name: localconnect_prometheus_data
+    driver: local
+
+  grafana_data:
+    name: localconnect_grafana_data
+    driver: local
+
+# ── Network ──────────────────────────────────────────────────────
+networks:
+  localconnect-net:
+    driver: bridge
+    name: localconnect-net

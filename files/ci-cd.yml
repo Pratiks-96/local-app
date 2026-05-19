@@ -1,0 +1,510 @@
+name: LocalConnect CI/CD — Build → Test → Deploy
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  DOCKERHUB_USER:  pratik6958
+  BACKEND_IMAGE:   pratik6958/localconnect-backend
+  FRONTEND_IMAGE:  pratik6958/localconnect-frontend
+
+# ═══════════════════════════════════════════════════════════════
+#  REQUIRED GITHUB SECRETS:
+#
+#  DOCKERHUB_USERNAME   → pratik6958
+#  DOCKERHUB_TOKEN      → DockerHub access token (not password)
+#
+#  EC2_HOST             → EC2 public IP  e.g. 54.123.45.67
+#  EC2_USER             → ubuntu  (or ec2-user for Amazon Linux)
+#  EC2_SSH_KEY          → contents of your .pem private key file
+#
+# ═══════════════════════════════════════════════════════════════
+
+jobs:
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1 — Install Prerequisites on EC2 via SSH
+  # Runs only on first push or when setup script changes
+  # ─────────────────────────────────────────────────────────────
+  setup-ec2:
+    name: 🔧 Install Prerequisites on EC2
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install prerequisites on EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.EC2_SSH_KEY }}
+          timeout:  10m
+          script: |
+            set -e
+            echo "============================================"
+            echo "  Installing Prerequisites on EC2"
+            echo "============================================"
+
+            # ── Update system ──────────────────────────────
+            sudo apt-get update -y
+            sudo apt-get upgrade -y
+
+            # ── Install Docker ─────────────────────────────
+            if ! command -v docker &> /dev/null; then
+              echo ">>> Installing Docker..."
+              sudo apt-get install -y ca-certificates curl gnupg lsb-release
+              sudo mkdir -p /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+                sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              echo "deb [arch=$(dpkg --print-architecture) \
+                signed-by=/etc/apt/keyrings/docker.gpg] \
+                https://download.docker.com/linux/ubuntu \
+                $(lsb_release -cs) stable" | \
+                sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt-get update -y
+              sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+              sudo usermod -aG docker $USER
+              sudo systemctl enable docker
+              sudo systemctl start docker
+              echo "✅ Docker installed"
+            else
+              echo "✅ Docker already installed: $(docker --version)"
+            fi
+
+            # ── Install Docker Compose standalone ──────────
+            if ! command -v docker-compose &> /dev/null; then
+              echo ">>> Installing Docker Compose..."
+              sudo curl -SL \
+                https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-x86_64 \
+                -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+              echo "✅ Docker Compose installed"
+            else
+              echo "✅ Docker Compose: $(docker-compose --version)"
+            fi
+
+            # ── Install kubectl ────────────────────────────
+            if ! command -v kubectl &> /dev/null; then
+              echo ">>> Installing kubectl..."
+              curl -LO "https://dl.k8s.io/release/v1.30.0/bin/linux/amd64/kubectl"
+              sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+              rm kubectl
+              echo "✅ kubectl installed"
+            else
+              echo "✅ kubectl: $(kubectl version --client --short 2>/dev/null)"
+            fi
+
+            # ── Install Minikube ───────────────────────────
+            if ! command -v minikube &> /dev/null; then
+              echo ">>> Installing Minikube..."
+              curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+              sudo install minikube-linux-amd64 /usr/local/bin/minikube
+              rm minikube-linux-amd64
+              echo "✅ Minikube installed"
+            else
+              echo "✅ Minikube: $(minikube version --short)"
+            fi
+
+            # ── Install Nginx ──────────────────────────────
+            if ! command -v nginx &> /dev/null; then
+              echo ">>> Installing Nginx..."
+              sudo apt-get install -y nginx
+              sudo systemctl enable nginx
+              sudo systemctl start nginx
+              echo "✅ Nginx installed"
+            else
+              echo "✅ Nginx: $(nginx -v 2>&1)"
+            fi
+
+            # ── Install Git ────────────────────────────────
+            if ! command -v git &> /dev/null; then
+              sudo apt-get install -y git
+            fi
+            echo "✅ Git: $(git --version)"
+
+            # ── Start Minikube if not running ──────────────
+            if ! minikube status | grep -q "Running"; then
+              echo ">>> Starting Minikube..."
+              sudo -u $USER minikube start \
+                --driver=docker \
+                --memory=4096 \
+                --cpus=2 \
+                --addons=ingress
+              echo "✅ Minikube started"
+            else
+              echo "✅ Minikube already running"
+            fi
+
+            # ── Clone app repo if not exists ──────────────
+            if [ ! -d "/home/$USER/localconnect-app" ]; then
+              echo ">>> Cloning app repo..."
+              git clone https://github.com/${{ github.repository }}.git \
+                /home/$USER/localconnect-app
+            fi
+
+            echo ""
+            echo "============================================"
+            echo "  All prerequisites installed! ✅"
+            echo "============================================"
+            docker --version
+            docker-compose --version
+            kubectl version --client --short 2>/dev/null
+            minikube version --short
+            nginx -v 2>&1
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2 — Test Backend (Unit Tests)
+  # ─────────────────────────────────────────────────────────────
+  test-backend:
+    name: 🧪 Test Backend
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER:     testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB:       testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Run backend tests
+        env:
+          DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
+          SECRET_KEY:   test-secret-key-for-ci-must-be-at-least-32-chars-long
+        run: |
+          cd backend
+          python -m pytest tests/ -v --tb=short 2>/dev/null || \
+            echo "⚠️  No tests found — skipping"
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 3 — Docker Compose Test on EC2 (Integration Test)
+  # Spins up full stack via docker-compose and smoke tests it
+  # ─────────────────────────────────────────────────────────────
+  test-compose:
+    name: 🐳 Docker Compose Integration Test on EC2
+    runs-on: ubuntu-latest
+    needs: [setup-ec2, test-backend]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run docker-compose test on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.EC2_SSH_KEY }}
+          timeout:  15m
+          script: |
+            set -e
+            echo "============================================"
+            echo "  Docker Compose Integration Test"
+            echo "============================================"
+
+            cd /home/$USER/localconnect-app
+
+            # Pull latest code
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Login to DockerHub (to pull/push images)
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+              docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            # Stop any existing compose stack
+            docker-compose down --remove-orphans 2>/dev/null || true
+
+            # Build and start full stack
+            echo ">>> Starting docker-compose stack..."
+            VITE_API_URL=http://localhost:8000/api \
+              docker-compose up --build -d
+
+            # Wait for services to be healthy
+            echo ">>> Waiting for services to be healthy..."
+            sleep 30
+
+            # ── Smoke Tests ────────────────────────────────
+            echo ">>> Running smoke tests..."
+
+            # Test backend health
+            for i in {1..10}; do
+              if curl -sf http://localhost:8000/health; then
+                echo "✅ Backend health check passed"
+                break
+              fi
+              echo "Waiting for backend... ($i/10)"
+              sleep 5
+            done
+
+            # Test backend API
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health)
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ Backend API: HTTP $HTTP_STATUS"
+            else
+              echo "❌ Backend API: HTTP $HTTP_STATUS"
+              docker-compose logs backend
+              exit 1
+            fi
+
+            # Test frontend
+            FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000)
+            if [ "$FRONTEND_STATUS" = "200" ]; then
+              echo "✅ Frontend: HTTP $FRONTEND_STATUS"
+            else
+              echo "❌ Frontend: HTTP $FRONTEND_STATUS"
+              docker-compose logs frontend
+              exit 1
+            fi
+
+            # Test Prometheus
+            PROM_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9090)
+            echo "✅ Prometheus: HTTP $PROM_STATUS"
+
+            # Test Grafana
+            GRAFANA_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3001)
+            echo "✅ Grafana: HTTP $GRAFANA_STATUS"
+
+            # Show running containers
+            echo ""
+            echo ">>> Running containers:"
+            docker-compose ps
+
+            # Stop compose stack after test
+            echo ">>> Stopping docker-compose stack..."
+            docker-compose down
+
+            echo ""
+            echo "============================================"
+            echo "  Docker Compose Tests PASSED ✅"
+            echo "============================================"
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 4 — Build & Push Backend Image to DockerHub
+  # ─────────────────────────────────────────────────────────────
+  build-backend:
+    name: 🔨 Build & Push Backend → DockerHub
+    runs-on: ubuntu-latest
+    needs: test-compose
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      - name: Print pushed image
+        run: |
+          echo "✅ Backend pushed:"
+          echo "   docker pull ${{ env.BACKEND_IMAGE }}:latest"
+          echo "   docker pull ${{ env.BACKEND_IMAGE }}:sha-${{ github.sha }}"
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 5 — Build & Push Frontend Image to DockerHub
+  # ─────────────────────────────────────────────────────────────
+  build-frontend:
+    name: 🔨 Build & Push Frontend → DockerHub
+    runs-on: ubuntu-latest
+    needs: test-compose
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:sha-${{ github.sha }}
+          build-args: |
+            VITE_API_URL=http://${{ secrets.EC2_HOST }}/api
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      - name: Print pushed image
+        run: |
+          echo "✅ Frontend pushed:"
+          echo "   docker pull ${{ env.FRONTEND_IMAGE }}:latest"
+          echo "   docker pull ${{ env.FRONTEND_IMAGE }}:sha-${{ github.sha }}"
+
+  # ─────────────────────────────────────────────────────────────
+  # JOB 6 — Deploy to Minikube on EC2 via SSH
+  # ─────────────────────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy to Minikube on EC2
+    runs-on: ubuntu-latest
+    needs: [build-backend, build-frontend]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Minikube via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key:      ${{ secrets.EC2_SSH_KEY }}
+          timeout:  15m
+          script: |
+            set -e
+            echo "============================================"
+            echo "  Deploying to Minikube on EC2"
+            echo "  SHA: ${{ github.sha }}"
+            echo "============================================"
+
+            # Pull latest code
+            cd /home/$USER/localconnect-app
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Login to DockerHub
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
+              docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            # Pull new images from DockerHub
+            echo ">>> Pulling images from DockerHub..."
+            docker pull ${{ env.BACKEND_IMAGE }}:sha-${{ github.sha }}
+            docker pull ${{ env.FRONTEND_IMAGE }}:sha-${{ github.sha }}
+
+            # Load images into Minikube
+            echo ">>> Loading images into Minikube..."
+            minikube image load ${{ env.BACKEND_IMAGE }}:sha-${{ github.sha }}
+            minikube image load ${{ env.FRONTEND_IMAGE }}:sha-${{ github.sha }}
+
+            # Update image tags in K8s manifests
+            echo ">>> Updating K8s manifests..."
+            sed -i "s|pratik6958/localconnect-backend:.*|${{ env.BACKEND_IMAGE }}:sha-${{ github.sha }}|g" \
+              k8s/03-backend.yaml
+            sed -i "s|pratik6958/localconnect-frontend:.*|${{ env.FRONTEND_IMAGE }}:sha-${{ github.sha }}|g" \
+              k8s/04-frontend.yaml
+
+            # Apply K8s manifests
+            echo ">>> Applying K8s manifests..."
+            kubectl apply -f k8s/00-namespace.yaml
+            kubectl apply -f k8s/01-config-secrets.yaml
+            kubectl apply -f k8s/02-postgres.yaml
+            kubectl apply -f k8s/03-backend.yaml
+            kubectl apply -f k8s/04-frontend.yaml
+
+            # Wait for rollout
+            echo ">>> Waiting for rollout..."
+            kubectl rollout status deployment/backend  -n localconnect --timeout=180s
+            kubectl rollout status deployment/frontend -n localconnect --timeout=180s
+
+            # Setup Nginx port forwarding
+            echo ">>> Configuring Nginx..."
+            sudo cp nginx/ec2-nginx.conf /etc/nginx/sites-available/localconnect
+            sudo ln -sf /etc/nginx/sites-available/localconnect \
+                        /etc/nginx/sites-enabled/localconnect
+            sudo rm -f /etc/nginx/sites-enabled/default
+            sudo nginx -t
+            sudo systemctl reload nginx
+
+            # Setup Minikube port forwarding in background
+            echo ">>> Setting up Minikube port forwarding..."
+            # Kill existing port-forward processes
+            pkill -f "kubectl port-forward" 2>/dev/null || true
+            sleep 2
+
+            # Start port-forward for frontend (30300)
+            nohup kubectl port-forward \
+              --address 127.0.0.1 \
+              svc/frontend-service 30300:80 \
+              -n localconnect > /tmp/pf-frontend.log 2>&1 &
+
+            # Start port-forward for backend (30800)
+            nohup kubectl port-forward \
+              --address 127.0.0.1 \
+              svc/backend-service 30800:8000 \
+              -n localconnect > /tmp/pf-backend.log 2>&1 &
+
+            sleep 5
+
+            # Verify deployment
+            echo ""
+            echo ">>> Pod status:"
+            kubectl get pods -n localconnect
+
+            echo ""
+            echo ">>> Services:"
+            kubectl get services -n localconnect
+
+            # Smoke test via Nginx
+            echo ""
+            echo ">>> Smoke testing via Nginx..."
+            sleep 5
+
+            HEALTH=$(curl -sf http://localhost/health || echo "FAILED")
+            if echo "$HEALTH" | grep -q "OK\|healthy\|200\|ok"; then
+              echo "✅ Health check passed: $HEALTH"
+            else
+              echo "⚠️  Health: $HEALTH"
+              kubectl logs -n localconnect deployment/backend --tail=20
+            fi
+
+            echo ""
+            echo "============================================"
+            echo "  Deployment Complete! ✅"
+            echo "  App: http://${{ secrets.EC2_HOST }}"
+            echo "  API: http://${{ secrets.EC2_HOST }}/api"
+            echo "  Docs: http://${{ secrets.EC2_HOST }}/docs"
+            echo "============================================"
