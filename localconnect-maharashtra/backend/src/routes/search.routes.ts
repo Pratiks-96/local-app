@@ -28,7 +28,6 @@ router.get('/', authenticate, async (req: AuthRequest, res, next) => {
           OR: [
             { content: { contains: q, mode: 'insensitive' } },
             { title: { contains: q, mode: 'insensitive' } },
-            { tags: { has: q.toLowerCase() } },
           ],
         },
         take: 10,
@@ -56,6 +55,9 @@ router.get('/', authenticate, async (req: AuthRequest, res, next) => {
       results.locations = await prisma.location.findMany({
         where: { name: { contains: q, mode: 'insensitive' } },
         take: 10,
+        include: {
+          parent: { include: { parent: { include: { parent: true } } } },
+        },
       });
     }
 
@@ -63,6 +65,7 @@ router.get('/', authenticate, async (req: AuthRequest, res, next) => {
       results.marketplace = await prisma.marketplaceItem.findMany({
         where: {
           isSold: false,
+          ...(locationIds.length ? { locationId: { in: locationIds } } : {}),
           OR: [
             { title: { contains: q, mode: 'insensitive' } },
             { description: { contains: q, mode: 'insensitive' } },

@@ -14,6 +14,7 @@ import MessagesPage from '@/pages/MessagesPage';
 import NotificationsPage from '@/pages/NotificationsPage';
 import ProfilePage from '@/pages/ProfilePage';
 import SettingsPage from '@/pages/SettingsPage';
+import SearchPage from '@/pages/SearchPage';
 import AdminDashboardPage from '@/pages/admin/AdminDashboardPage';
 import AdminUsersPage from '@/pages/admin/AdminUsersPage';
 import AdminReportsPage from '@/pages/admin/AdminReportsPage';
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/feed" element={<FeedPage />} />
+          <Route path="/search" element={<SearchPage />} />
           <Route path="/posts/:id" element={<PostDetailPage />} />
           <Route path="/marketplace" element={<MarketplacePage />} />
           <Route path="/messages" element={<MessagesPage />} />

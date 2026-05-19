@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Home,
   ShoppingBag,
@@ -25,6 +25,7 @@ const navItems = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const { theme, toggle } = useThemeStore();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'MODERATOR';
@@ -39,12 +40,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
 
           <Link
-            to="/feed"
-            className="flex-1 max-w-md hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[hsl(var(--muted))] text-sm text-[hsl(var(--muted-foreground))]"
+            to="/search"
+            className="flex-1 max-w-md hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-[hsl(var(--muted))] text-sm text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--border))] transition-colors"
           >
             <Search className="h-4 w-4" />
             Search your neighborhood...
           </Link>
+          <button
+            type="button"
+            onClick={() => navigate('/search')}
+            className="md:hidden p-2 rounded-lg hover:bg-[hsl(var(--muted))]"
+            aria-label="Search"
+          >
+            <Search className="h-5 w-5" />
+          </button>
 
           <div className="flex items-center gap-2">
             <button onClick={toggle} className="p-2 rounded-lg hover:bg-[hsl(var(--muted))]" aria-label="Toggle theme">
