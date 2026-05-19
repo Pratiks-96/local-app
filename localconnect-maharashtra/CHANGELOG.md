@@ -2,6 +2,10 @@
 
 ## 2026-05-19
 
+### Fixed (frontend build)
+- `ProtectedRoute.tsx`: fixed `isAuthenticated` called as function when it was already a boolean
+- `App.tsx`: removed unused `useAuthStore` import
+
 ### Fixed
 - **Prisma schema**: Removed invalid `reportedPosts` relation on `User` model (caused Docker build failure)
 - **Dockerfile**: Added OpenSSL on Alpine builder stage for Prisma

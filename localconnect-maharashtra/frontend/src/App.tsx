@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { Toaster } from '@/components/ui/Toaster';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
