@@ -8,6 +8,8 @@ import fs from 'fs';
 import { config } from './config';
 import { swaggerSpec } from './config/swagger';
 import { errorHandler } from './middleware/errorHandler';
+import { metricsMiddleware } from './middleware/metrics';
+import { register, refreshAppMetrics } from './lib/metrics';
 
 import authRoutes from './routes/auth.routes';
 import usersRoutes from './routes/users.routes';
@@ -38,6 +40,18 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+// Prometheus metrics (no rate limit, no auth — scrape from internal network only)
+app.get('/metrics', async (_req, res) => {
+  try {
+    await refreshAppMetrics();
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).end(String(err));
+  }
+});
+
+app.use(metricsMiddleware);
 app.use('/api', limiter);
 
 // Local file uploads for development

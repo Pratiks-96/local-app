@@ -1,0 +1,42 @@
+# Add this to YOUR existing Prometheus server (not on 20.192.29.50)
+# Copy scrape_configs below into prometheus.yml on your central Prometheus host
+#
+# Requires Azure NSG ports open: 8080, 9187, 9121, 9090
+
+scrape_configs:
+  - job_name: 'localconnect-app'
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['20.192.29.50:8080']
+        labels:
+          service: 'localconnect-api'
+          instance: '20.192.29.50'
+
+  - job_name: 'localconnect-postgres'
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['20.192.29.50:9187']
+        labels:
+          service: 'postgresql'
+          instance: '20.192.29.50'
+
+  - job_name: 'localconnect-redis'
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['20.192.29.50:9121']
+        labels:
+          service: 'redis'
+          instance: '20.192.29.50'
+
+  # Optional: scrape the Prometheus server on the VM itself (meta-monitoring)
+  - job_name: 'localconnect-prometheus'
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['20.192.29.50:9090']
+        labels:
+          service: 'prometheus'
+          instance: '20.192.29.50'

@@ -1,8 +1,45 @@
+# Prometheus config — runs ON the same VM as LocalConnect (Docker network)
+# Prometheus UI: http://20.192.29.50:9090
+
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'localconnect-maharashtra'
+    instance: '20.192.29.50'
+    environment: 'production'
 
 scrape_configs:
+  # Node.js API metrics
   - job_name: 'localconnect-backend'
+    metrics_path: /metrics
     static_configs:
       - targets: ['backend:4000']
-    metrics_path: /api/health
+        labels:
+          service: 'localconnect-api'
+          public_url: 'http://20.192.29.50:8080'
+
+  # Also scrape via Nginx (same metrics, validates proxy path)
+  - job_name: 'localconnect-backend-nginx'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['nginx:80']
+        labels:
+          service: 'localconnect-api-nginx'
+          public_url: 'http://20.192.29.50:8080/metrics'
+
+  # PostgreSQL
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'postgresql'
+          public_url: 'http://20.192.29.50:9187'
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          public_url: 'http://20.192.29.50:9121'
