@@ -59,6 +59,7 @@ In Azure Portal → VM → Networking → Add inbound rule:
 
 | Issue | Fix |
 |-------|-----|
+| `npm ci` / no package-lock.json | Fixed — Dockerfiles use `npm install` now |
 | `/docker-entrypoint.sh: not found` | Run `docker compose build --no-cache backend` (old image) |
 | Port 80 in use | Use `HTTP_PORT=8080` in `.env` |
 | nginx `host not found backend` | Backend not running — fix backend first |

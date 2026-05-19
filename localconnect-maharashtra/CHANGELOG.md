@@ -1,6 +1,11 @@
 # Changelog
 
-## 2026-05-19 (latest — VM deploy fix)
+## 2026-05-19 (latest — npm ci fix)
+
+### Fixed
+- **Dockerfiles**: Changed `npm ci` → `npm install` (no package-lock.json required)
+
+## 2026-05-19 (VM deploy fix)
 
 ### Fixed
 - **Backend Docker**: Removed `docker-entrypoint.sh` — uses inline `CMD` (fixes exit 127 / not found)
