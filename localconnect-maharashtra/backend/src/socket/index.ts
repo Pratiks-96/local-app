@@ -28,8 +28,9 @@ export function initSocket(httpServer: HttpServer) {
     }
   });
 
-  io.on('connection', (socket: Socket & { userId: string }) => {
-    socket.join(`user:${socket.userId}`);
+  io.on('connection', (socket) => {
+    const authSocket = socket as Socket & { userId: string };
+    authSocket.join(`user:${authSocket.userId}`);
 
     socket.on('join:conversation', (conversationId: string) => {
       socket.join(`conversation:${conversationId}`);
@@ -45,7 +46,7 @@ export function initSocket(httpServer: HttpServer) {
           where: {
             conversationId_userId: {
               conversationId: data.conversationId,
-              userId: socket.userId,
+              userId: authSocket.userId,
             },
           },
         });
@@ -54,7 +55,7 @@ export function initSocket(httpServer: HttpServer) {
         const message = await prisma.message.create({
           data: {
             conversationId: data.conversationId,
-            senderId: socket.userId,
+            senderId: authSocket.userId,
             content: data.content,
             mediaUrl: data.mediaUrl,
           },
@@ -71,7 +72,7 @@ export function initSocket(httpServer: HttpServer) {
         io.to(`conversation:${data.conversationId}`).emit('message:new', message);
 
         const members = await prisma.conversationMember.findMany({
-          where: { conversationId: data.conversationId, userId: { not: socket.userId } },
+          where: { conversationId: data.conversationId, userId: { not: authSocket.userId } },
         });
         for (const m of members) {
           await prisma.notification.create({
@@ -92,14 +93,14 @@ export function initSocket(httpServer: HttpServer) {
 
     socket.on('typing:start', (conversationId: string) => {
       socket.to(`conversation:${conversationId}`).emit('typing:start', {
-        userId: socket.userId,
+        userId: authSocket.userId,
         conversationId,
       });
     });
 
     socket.on('typing:stop', (conversationId: string) => {
       socket.to(`conversation:${conversationId}`).emit('typing:stop', {
-        userId: socket.userId,
+        userId: authSocket.userId,
         conversationId,
       });
     });

@@ -47,6 +47,11 @@ This replaces everything with the latest version (92 files).
 | `backend/prisma/schema.prisma` | Removed broken `reportedPosts` field (Docker build failed) |
 | `frontend/src/components/ProtectedRoute.tsx` | Fixed `isAuthenticated()` TypeScript error |
 | `frontend/src/App.tsx` | Removed unused import |
+| `backend/src/lib/jwt.ts` | Fixed JWT sign TypeScript errors |
+| `backend/src/middleware/auth.ts` | Fixed Express User type conflict |
+| `backend/src/types/express.d.ts` | **NEW** — auth types for Express |
+| `backend/src/socket/index.ts` | Fixed Socket.IO types |
+| `backend/src/routes/posts.routes.ts` | Fixed query params types |
 
 ### Docker & deployment improvements
 

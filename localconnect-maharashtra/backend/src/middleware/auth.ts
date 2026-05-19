@@ -1,12 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { Role } from '@prisma/client';
-import { verifyAccessToken, TokenPayload } from '../lib/jwt';
+import { verifyAccessToken } from '../lib/jwt';
 
-export interface AuthRequest extends Request {
-  user?: TokenPayload;
-}
+// Authenticated request — req.user is TokenPayload (see src/types/express.d.ts)
+export type AuthRequest = Request;
 
-export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {
+export function authenticate(req: Request, res: Response, next: NextFunction): void {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Authentication required' });
@@ -22,7 +21,7 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
 }
 
 export function authorize(...roles: Role[]) {
-  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
       res.status(401).json({ error: 'Authentication required' });
       return;
@@ -35,7 +34,7 @@ export function authorize(...roles: Role[]) {
   };
 }
 
-export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+export function optionalAuth(req: Request, res: Response, next: NextFunction): void {
   const header = req.headers.authorization;
   if (header?.startsWith('Bearer ')) {
     try {

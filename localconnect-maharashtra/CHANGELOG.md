@@ -2,6 +2,12 @@
 
 ## 2026-05-19
 
+### Fixed (backend build)
+- TypeScript: JWT `expiresIn` sign options
+- TypeScript: Express `User` type vs auth payload (`src/types/express.d.ts`)
+- TypeScript: Socket.IO connection handler types
+- TypeScript: posts feed query parsing
+
 ### Fixed (frontend build)
 - `ProtectedRoute.tsx`: fixed `isAuthenticated` called as function when it was already a boolean
 - `App.tsx`: removed unused `useAuthStore` import

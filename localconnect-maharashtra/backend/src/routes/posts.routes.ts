@@ -16,11 +16,9 @@ router.get('/feed', authenticate, validate(feedQuerySchema), async (req: AuthReq
     if (!user?.locationId) throw new AppError(400, 'Please set your location');
 
     const locationIds = await getNearbyLocationIds(user.locationId);
-    const { cursor, limit, category } = req.query as {
-      cursor?: string;
-      limit: number;
-      category?: PostCategory;
-    };
+    const cursor = req.query.cursor as string | undefined;
+    const limit = Math.min(parseInt((req.query.limit as string) || '20', 10), 50);
+    const category = req.query.category as PostCategory | undefined;
 
     const posts = await prisma.post.findMany({
       where: {
