@@ -2,7 +2,6 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Prisma needs OpenSSL on Alpine
 RUN apk add --no-cache openssl libc6-compat
 
 COPY package*.json ./
@@ -23,17 +22,14 @@ RUN apk add --no-cache openssl libc6-compat
 
 COPY package*.json ./
 COPY prisma ./prisma/
-RUN npm ci --omit=dev && npm install tsx
+RUN npm ci --omit=dev && npm install tsx prisma && npx prisma generate
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 RUN mkdir -p uploads
 
 ENV NODE_ENV=production
 EXPOSE 4000
 
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-
-CMD ["/docker-entrypoint.sh"]
+# No external entrypoint script — works reliably when copied from Windows
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && (npx tsx prisma/seed.ts || true) && exec node dist/index.js"]

@@ -38,6 +38,12 @@ services:
       dockerfile: Dockerfile
     container_name: localconnect-backend
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 90s
     environment:
       PORT: 4000
       NODE_ENV: production

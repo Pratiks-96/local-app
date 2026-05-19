@@ -1,25 +1,24 @@
 # Changelog
 
-## 2026-05-19
-
-### Fixed (backend build)
-- TypeScript: JWT `expiresIn` sign options
-- TypeScript: Express `User` type vs auth payload (`src/types/express.d.ts`)
-- TypeScript: Socket.IO connection handler types
-- TypeScript: posts feed query parsing
-
-### Fixed (frontend build)
-- `ProtectedRoute.tsx`: fixed `isAuthenticated` called as function when it was already a boolean
-- `App.tsx`: removed unused `useAuthStore` import
+## 2026-05-19 (latest — VM deploy fix)
 
 ### Fixed
-- **Prisma schema**: Removed invalid `reportedPosts` relation on `User` model (caused Docker build failure)
-- **Dockerfile**: Added OpenSSL on Alpine builder stage for Prisma
-- **docker-entrypoint**: Retries database setup until Postgres is ready
-- **docker-compose**: Shared network, healthchecks, env-based DB password
-- Added `.dockerignore` to speed up builds (excludes `node_modules`)
+- **Backend Docker**: Removed `docker-entrypoint.sh` — uses inline `CMD` (fixes exit 127 / not found)
+- **Backend Docker**: Run `prisma generate` in production image
+- **Nginx**: Docker DNS resolver — starts even if backend is briefly down
+- **Default port**: `HTTP_PORT=8080` in `.env.example` (avoids port 80 conflict)
+- **Deploy script**: `scripts/deploy-vm.sh` — full one-command VM setup
+
+### Previously fixed
+- Prisma schema `reportedPosts` removed
+- Frontend `ProtectedRoute` TypeScript
+- Backend JWT + Express `User` types
+- OpenSSL on Alpine for Prisma
 
 ### Added
-- `scripts/start.sh` — one-command VM setup with auto JWT generation
-- `docs/VM-SETUP.md` — simple deployment guide for Azure/EC2
-- Improved `.env.example` with comments
+- `DEPLOY-VM.md` — simple VM deployment guide
+- `scripts/deploy-vm.sh` — automated deploy
+- `.gitattributes` — LF line endings for shell scripts
+
+### Removed
+- `backend/docker-entrypoint.sh` (caused VM deploy failures)

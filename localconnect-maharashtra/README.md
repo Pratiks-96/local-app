@@ -75,22 +75,21 @@ localconnect-maharashtra/
 ```bash
 cd localconnect-maharashtra
 cp .env.example .env
+# Edit JWT secrets (openssl rand -base64 32)
 
-# Generate JWT secrets (run twice, paste into .env):
-openssl rand -base64 32
-
-docker compose up -d --build
+docker compose build --no-cache
+docker compose up -d
 ```
 
-**Or use the setup script (VM/Linux):**
+**VM / Azure (one command):**
 ```bash
-chmod +x scripts/start.sh
-./scripts/start.sh
+chmod +x scripts/deploy-vm.sh
+./scripts/deploy-vm.sh
 ```
 
-Open **http://localhost** or **http://YOUR_VM_IP** (port 80 via Nginx).
+Open **http://YOUR_VM_IP:8080** (default port 8080 avoids conflict with system nginx).
 
-> **VM / Azure / EC2?** See [docs/VM-SETUP.md](docs/VM-SETUP.md) for simple copy-paste steps.
+> Full VM guide: [DEPLOY-VM.md](DEPLOY-VM.md) | [UPDATE-GUIDE.md](UPDATE-GUIDE.md)
 
 API docs: **http://localhost/api/docs**
 
