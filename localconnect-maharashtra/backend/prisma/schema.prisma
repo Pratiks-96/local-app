@@ -80,7 +80,6 @@ model User {
   likes             Like[]
   bookmarks         Bookmark[]
   reports           Report[]  @relation("Reporter")
-  reportedPosts     Report[]  @relation("ReportedPost")
   marketplaceItems  MarketplaceItem[]
   notifications     Notification[]
   sentMessages      Message[] @relation("Sender")

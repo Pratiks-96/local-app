@@ -70,17 +70,27 @@ localconnect-maharashtra/
 └── docs/                    # Additional documentation
 ```
 
-## Quick Start (Docker)
+## Quick Start (Docker) — Recommended
 
 ```bash
 cd localconnect-maharashtra
 cp .env.example .env
-# Edit JWT secrets in .env
+
+# Generate JWT secrets (run twice, paste into .env):
+openssl rand -base64 32
 
 docker compose up -d --build
 ```
 
-Open **http://localhost** (port 80 via Nginx).
+**Or use the setup script (VM/Linux):**
+```bash
+chmod +x scripts/start.sh
+./scripts/start.sh
+```
+
+Open **http://localhost** or **http://YOUR_VM_IP** (port 80 via Nginx).
+
+> **VM / Azure / EC2?** See [docs/VM-SETUP.md](docs/VM-SETUP.md) for simple copy-paste steps.
 
 API docs: **http://localhost/api/docs**
 
@@ -96,17 +106,21 @@ API docs: **http://localhost/api/docs**
 
 ## Local Development (without Docker)
 
+> **On a VM, use Docker instead** (`docker compose up -d --build`). Manual npm setup requires PostgreSQL and Redis installed separately.
+
 ### Prerequisites
 
 - Node.js 20+
-- PostgreSQL 16
-- Redis 7
+- PostgreSQL 16 running on localhost
+- Redis 7 running on localhost
 
 ### Backend
 
 ```bash
 cd backend
 cp .env.example .env
+# Set DATABASE_URL=postgresql://postgres:postgres@localhost:5432/localconnect
+
 npm install
 npx prisma generate
 npx prisma db push
@@ -126,6 +140,16 @@ npm run dev
 ```
 
 App runs at http://localhost:5173 (proxies `/api` to backend)
+
+## Troubleshooting
+
+| Error | Fix |
+|-------|-----|
+| `reportedPosts` Prisma validation | Fixed — pull latest code, rebuild: `docker compose up -d --build` |
+| `Can't reach database at localhost:5432` | Use Docker: `docker compose up -d --build` (don't use `npm run dev` without Postgres) |
+| `cd backend: No such file` | You're already in backend — go to project root first |
+| Docker build fails on `prisma generate` | Run `docker compose build --no-cache` after updating files |
+| Check logs | `docker compose logs backend --tail 50` |
 
 ## API Endpoints
 
