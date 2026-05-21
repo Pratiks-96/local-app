@@ -69,15 +69,16 @@ export async function getMapContent(options: {
       where: { id: options.userId },
       include: { location: true },
     });
-    if (user?.location) {
+    if (user?.location && user.locationId) {
       locationIds = await getNearbyLocationIds(user.locationId);
       if (centerLat == null && user.location.latitude != null) {
         centerLat = user.location.latitude;
         centerLng = user.location.longitude ?? undefined;
       }
       if (centerLat == null) {
+        const areaLookupId = user.location.parentId ?? user.location.id;
         const area = await prisma.location.findUnique({
-          where: { id: user.location.parentId || user.locationId },
+          where: { id: areaLookupId },
         });
         if (area?.latitude != null) {
           centerLat = area.latitude;
@@ -191,10 +192,9 @@ export async function getMapContent(options: {
     });
   }
 
-  let googlePlaces: Awaited<ReturnType<typeof nearbyPlaces>> = [];
-  if (options.includeGooglePlaces !== false && isGoogleMapsConfigured()) {
-    googlePlaces = await nearbyPlaces(centerLat, centerLng, Math.min(radiusKm * 1000, 5000));
-    for (const p of googlePlaces) {
+  if (options.includeGooglePlaces !== false && isPlacesConfigured()) {
+    const osmPlaces = await nearbyPlaces(centerLat, centerLng, Math.min(radiusKm * 1000, 5000));
+    for (const p of osmPlaces) {
       markers.push({
         id: p.placeId,
         type: 'place',
@@ -202,7 +202,7 @@ export async function getMapContent(options: {
         subtitle: p.vicinity,
         lat: p.lat,
         lng: p.lng,
-        meta: { types: p.types, rating: p.rating },
+        meta: { types: p.types },
       });
     }
   }
