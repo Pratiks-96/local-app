@@ -21,6 +21,8 @@ import notificationsRoutes from './routes/notifications.routes';
 import adminRoutes from './routes/admin.routes';
 import searchRoutes from './routes/search.routes';
 import googleAuthRoutes from './routes/google-auth.routes';
+import mapRoutes from './routes/map.routes';
+import placesRoutes from './routes/places.routes';
 
 const app = express();
 
@@ -78,6 +80,8 @@ app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/map', mapRoutes);
+app.use('/api/places', placesRoutes);
 
 app.use(errorHandler);
 

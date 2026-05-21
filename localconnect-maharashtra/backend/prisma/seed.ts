@@ -1,14 +1,37 @@
 import { PrismaClient, Role, PostCategory } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { coordsFor } from './location-coords';
 
 const prisma = new PrismaClient();
 
-async function upsertLocation(name: string, type: string, parentId?: string) {
+async function upsertLocation(
+  name: string,
+  type: string,
+  parentId?: string,
+  areaName?: string,
+) {
+  const coords = coordsFor(name, type, areaName);
   const existing = await prisma.location.findFirst({
     where: { name, type, parentId: parentId ?? null },
   });
-  if (existing) return existing;
-  return prisma.location.create({ data: { name, type, parentId } });
+  if (existing) {
+    if (coords && (existing.latitude == null || existing.longitude == null)) {
+      return prisma.location.update({
+        where: { id: existing.id },
+        data: { latitude: coords.lat, longitude: coords.lng },
+      });
+    }
+    return existing;
+  }
+  return prisma.location.create({
+    data: {
+      name,
+      type,
+      parentId,
+      latitude: coords?.lat,
+      longitude: coords?.lng,
+    },
+  });
 }
 
 const maharashtraData = {
@@ -59,7 +82,7 @@ async function seedLocations() {
       locationMap[`${city.name}-${area.name}`] = areaLoc.id;
 
       for (const society of area.societies) {
-        const societyLoc = await upsertLocation(society, 'society', areaLoc.id);
+        const societyLoc = await upsertLocation(society, 'society', areaLoc.id, area.name);
         locationMap[`${city.name}-${area.name}-${society}`] = societyLoc.id;
       }
     }

@@ -9,6 +9,7 @@ import {
   Moon,
   Sun,
   Search,
+  Map,
   Shield,
   LogOut,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { to: '/feed', icon: Home, label: 'Feed' },
+  { to: '/map', icon: Map, label: 'Map' },
   { to: '/marketplace', icon: ShoppingBag, label: 'Marketplace' },
   { to: '/messages', icon: MessageCircle, label: 'Messages' },
   { to: '/notifications', icon: Bell, label: 'Notifications' },
