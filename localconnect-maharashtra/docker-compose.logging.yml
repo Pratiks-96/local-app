@@ -1,0 +1,19 @@
+# Run on APPLICATION VM (where LocalConnect Docker runs)
+# Usage:
+#   Set in .env:  LOGSTASH_HOST=20.198.104.118  LOGSTASH_PORT=5044
+#   docker compose -f docker-compose.yml -f docker-compose.logging.yml up -d filebeat
+
+services:
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.11.3
+    container_name: localconnect-filebeat
+    restart: unless-stopped
+    user: root
+    environment:
+      LOGSTASH_HOST: ${LOGSTASH_HOST:-20.198.104.118}
+      LOGSTASH_PORT: ${LOGSTASH_PORT:-5044}
+    volumes:
+      - ./logging/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: filebeat -e -strict.perms=false
