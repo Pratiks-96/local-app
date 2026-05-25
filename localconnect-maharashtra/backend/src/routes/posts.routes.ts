@@ -7,6 +7,7 @@ import { createPostSchema, feedQuerySchema, commentSchema } from '../schemas/pos
 import { getNearbyLocationIds } from '../services/location.service';
 import { AppError } from '../middleware/errorHandler';
 import { cacheDel } from '../lib/redis';
+import { recordPostCreated } from '../lib/metrics';
 
 const router = Router();
 
@@ -92,6 +93,7 @@ router.post('/', authenticate, validate(createPostSchema), async (req: AuthReque
       },
     });
 
+    await recordPostCreated(user.locationId);
     await cacheDel('feed:*');
     res.status(201).json(post);
   } catch (err) {

@@ -63,7 +63,33 @@ All jobs should show **UP**.
 Open: **http://20.192.29.50:3000**  
 Login: `admin` / password from `.env` (`GRAFANA_PASSWORD`)
 
+#### Community dashboard (users & posts by place)
+
+After deploy, open: **Dashboards → LocalConnect → LocalConnect — Users & Posts by Place**
+
+| Panel | What it shows |
+|-------|----------------|
+| Total registered users | All active accounts |
+| Total active posts | All posts in feed |
+| Users by place | Bar chart — sorted by count (city / area / society) |
+| Posts by place | Bar chart — per society |
+| Table | Users & posts per society — **click column headers to sort** |
+| Dropdowns **City** / **Area** | Filter charts to one region |
+
+Metrics refresh every **15s** when Prometheus scrapes `/metrics`.
+
 ---
+
+## Deploy dashboard updates on VM
+
+```bash
+cd ~/local-app/localconnect-maharashtra
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d --build backend
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml restart grafana prometheus
+```
+
+---
+
 
 ## Connect YOUR existing Prometheus server
 
@@ -97,12 +123,27 @@ Reload your Prometheus: `curl -X POST http://localhost:9090/-/reload`
 ## Key metrics
 
 ```
-localconnect_http_requests_total
-localconnect_http_request_duration_seconds
-localconnect_active_users
+localconnect_users_total
 localconnect_posts_total
+localconnect_users_by_location{city, area, society}
+localconnect_posts_by_location{city, area, society}
+localconnect_user_registrations_total
+localconnect_posts_created_total
+localconnect_http_requests_total
 localconnect_db_up
 localconnect_redis_up
+```
+
+Example — users in Pune:
+
+```promql
+sum(localconnect_users_by_location{city="Pune"})
+```
+
+Example — top societies by posts:
+
+```promql
+topk(10, localconnect_posts_by_location)
 ```
 
 Query in Prometheus: **http://20.192.29.50:9090/graph**

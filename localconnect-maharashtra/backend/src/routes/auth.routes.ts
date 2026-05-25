@@ -13,6 +13,7 @@ import {
   resetPasswordSchema,
 } from '../schemas/auth.schema';
 import { AppError } from '../middleware/errorHandler';
+import { recordUserRegistration } from '../lib/metrics';
 
 const router = Router();
 
@@ -62,6 +63,8 @@ router.post('/register', validate(registerSchema), async (req, res, next) => {
         locationId: true,
       },
     });
+
+    await recordUserRegistration(locationId);
 
     const tokens = {
       accessToken: signAccessToken({ userId: user.id, email: user.email || undefined, role: user.role }),
