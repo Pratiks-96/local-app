@@ -54,6 +54,10 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       USE_LOCAL_STORAGE: "true"
       LOCAL_UPLOAD_DIR: /app/uploads
+      # Distributed tracing → Jaeger on separate VM (OTLP HTTP)
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-localconnect-backend}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_TRACES_ENABLED: ${OTEL_TRACES_ENABLED:-true}
     volumes:
       - uploads_data:/app/uploads
     depends_on:

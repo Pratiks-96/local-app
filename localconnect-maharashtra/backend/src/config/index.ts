@@ -26,6 +26,11 @@ export const config = {
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
     callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:4000/api/auth/google/callback',
   },
+  tracing: {
+    enabled: process.env.OTEL_TRACES_ENABLED !== 'false',
+    endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || '',
+    serviceName: process.env.OTEL_SERVICE_NAME || 'localconnect-backend',
+  },
   smtp: {
     host: process.env.SMTP_HOST || '',
     port: parseInt(process.env.SMTP_PORT || '587', 10),
